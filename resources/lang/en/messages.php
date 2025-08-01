@@ -1,0 +1,23 @@
+<?php
+return [
+    'dashboard' => 'Dashboard',
+    'schedule' => 'Schedule',
+    'logout' => 'Logout',
+    'welcome' => 'Welcome',
+    'admin' => 'Admin',
+    'user_guide' => 'User Guide',
+    'download' => 'Download',
+    'approved' => 'Approved',
+    'waiting' => 'Waiting',
+    'reject' => 'Reject',
+    'login_title' => 'Sign in with admin account',
+    'username' => 'Username',
+    'username_placeholder' => 'Enter Username',
+    'password' => 'Password',
+    'password_placeholder' => 'Enter Password',
+    'login_button' => 'Sign In',
+    'divtik_title' => 'Information & Communication Technology Division of the Indonesian National Police',
+    'for_course' => 'For Course',
+    'for_research' => 'For Research',
+    'for_internship' => 'For Internship',
+]; 

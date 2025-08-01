@@ -1,0 +1,23 @@
+<?php
+return [
+    'dashboard' => 'Beranda',
+    'schedule' => 'Jadwal',
+    'logout' => 'Keluar',
+    'welcome' => 'Selamat Datang',
+    'admin' => 'Admin',
+    'user_guide' => 'Panduan Pengguna',
+    'download' => 'Unduh',
+    'approved' => 'Disetujui',
+    'waiting' => 'Menunggu',
+    'reject' => 'Ditolak',
+    'login_title' => 'Masuk dengan akun admin',
+    'username' => 'Username',
+    'username_placeholder' => 'Masukkan Username',
+    'password' => 'Kata Sandi',
+    'password_placeholder' => 'Masukkan Kata Sandi',
+    'login_button' => 'Masuk',
+    'divtik_title' => 'Divisi Teknologi Informasi & Komunikasi Kepolisian Republik Indonesia',
+    'for_course' => 'Untuk Kuliah',
+    'for_research' => 'Untuk Penelitian',
+    'for_internship' => 'Untuk Magang',
+]; 

@@ -1,0 +1,291 @@
+/* Sidebar Custom Styles */
+.sidebar-custom {
+    width: 260px;
+    min-height: 100vh;
+    flex-shrink: 0;
+}
+
+/* Override warna sidebar */
+body .sidebar.bg-danger {
+    background-color: #0f285f !important;
+}
+
+body .sidebar.bg-danger .nav-link:hover,
+body .sidebar.bg-danger .nav-link.active {
+    background-color: #0a1f47 !important;
+}
+
+/* Highlight untuk menu yang aktif */
+.sidebar .nav-link.active {
+    background-color: rgba(255, 255, 255, 0.2) !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
+
+.sidebar .nav-link.active:hover {
+    background-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Submenu yang aktif */
+.sidebar .collapse.show .nav-link.active {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    color: #ffffff !important;
+}
+
+/* Status Badge Styles */
+.badge.bg-success {
+    background-color: #198754 !important;
+    color: white !important;
+}
+
+.badge.bg-danger {
+    background-color: #dc3545 !important;
+    color: white !important;
+}
+
+.badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #000 !important;
+}
+
+/* Hapus garis merah dan perbaiki tampilan */
+.alert {
+    border: none !important;
+    border-radius: 8px !important;
+}
+.alert-success {
+    background-color: #d1fae5 !important;
+    color: #065f46 !important;
+}
+.alert-danger {
+    background-color: #fee2e2 !important;
+    color: #991b1b !important;
+}
+.alert-warning {
+    background-color: #fef3c7 !important;
+    color: #92400e !important;
+}
+/* Perbaiki tampilan card */
+.card {
+    border: none !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+}
+.card-header {
+    border-bottom: 1px solid #e5e7eb !important;
+}
+/* Perbaiki tombol */
+.btn {
+    border-radius: 6px !important;
+}
+.btn-outline-danger {
+    border-color: #dc3545 !important;
+    color: #dc3545 !important;
+}
+.btn-outline-danger:hover {
+    background-color: #dc3545 !important;
+    color: white !important;
+}
+
+/* Schedule Card Styles untuk Dashboard */
+.schedule-container {
+    position: relative !important;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.schedule-card.blurred {
+    filter: blur(2px) !important;
+    opacity: 0.6 !important;
+    transform: scale(0.95) !important;
+    pointer-events: none !important;
+}
+
+.schedule-card {
+    border: 2px solid transparent !important;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    transform-origin: center !important;
+    position: relative !important;
+    z-index: 1 !important;
+    cursor: pointer !important;
+}
+
+.schedule-card:hover {
+    transform: translateY(-8px) scale(1.02) !important;
+    box-shadow: 0 12px 35px rgba(0,0,0,0.2) !important;
+    border-color: #0f285f !important;
+    z-index: 10 !important;
+}
+
+.schedule-card.selected {
+    transform: translateY(-15px) scale(1.08) !important;
+    border-color: #0f285f !important;
+    background-color: #ffffff !important;
+    box-shadow: 0 20px 50px rgba(15, 40, 95, 0.3) !important;
+    z-index: 100 !important;
+    position: relative !important;
+    filter: blur(0px) !important;
+}
+
+.schedule-card.selected::before {
+    content: '' !important;
+    position: absolute !important;
+    top: -10px !important;
+    left: -10px !important;
+    right: -10px !important;
+    bottom: -10px !important;
+    background: linear-gradient(135deg, #0f285f, #1e40af) !important;
+    border-radius: 12px !important;
+    z-index: -1 !important;
+    opacity: 0.1 !important;
+}
+
+.schedule-card.selected .card-header {
+    background: linear-gradient(135deg, #0f285f, #1e40af) !important;
+    color: white !important;
+    border-radius: 8px 8px 0 0 !important;
+}
+
+.schedule-card.selected .card-header .badge {
+    background-color: rgba(255, 255, 255, 0.9) !important;
+    color: #0f285f !important;
+    font-weight: 600 !important;
+}
+
+.schedule-card.selected .card-body {
+    background-color: #ffffff !important;
+    position: relative !important;
+}
+
+.schedule-card.selected .card-footer {
+    background: linear-gradient(135deg, #e8f0ff, #f0f4ff) !important;
+    border-top: 2px solid #0f285f !important;
+    border-radius: 0 0 8px 8px !important;
+}
+
+/* Conflict Card Styles */
+.schedule-card.conflict-card {
+    border-color: #dc3545 !important;
+    box-shadow: 0 4px 15px rgba(220, 53, 69, 0.2) !important;
+}
+
+.schedule-card.conflict-card .card-header {
+    background-color: #dc3545 !important;
+    color: white !important;
+}
+
+.schedule-card.conflict-card .card-header .badge {
+    background-color: white !important;
+    color: #dc3545 !important;
+}
+
+/* Alert Warning Styles */
+.alert-warning {
+    background: linear-gradient(135deg, #fff3cd, #ffeaa7) !important;
+    border: 2px solid #ffc107 !important;
+    color: #856404 !important;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 15px rgba(255, 193, 7, 0.2) !important;
+}
+
+.alert-warning .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%) !important;
+}
+
+/* Table Warning Styles */
+.table-warning {
+    background-color: rgba(255, 193, 7, 0.1) !important;
+}
+
+.table-warning:hover {
+    background-color: rgba(255, 193, 7, 0.2) !important;
+}
+
+/* Overlay untuk background blur */
+.overlay-blur {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    background: rgba(0, 0, 0, 0.1) !important;
+    backdrop-filter: blur(1px) !important;
+    z-index: 50 !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.overlay-blur.active {
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+/* Hapus garis merah dari form */
+.form-control:focus {
+    border-color: #0f285f !important;
+    box-shadow: 0 0 0 0.2rem rgba(15, 40, 95, 0.25) !important;
+}
+
+/* Header dan Navbar Styles */
+.navbar {
+    border-bottom: 1px solid #e5e7eb !important;
+    position: relative !important;
+    z-index: 1000 !important;
+    display: block !important;
+    visibility: visible !important;
+    flex-shrink: 0;
+}
+
+.navbar-expand {
+    display: flex !important;
+}
+
+/* Notifikasi dropdown styles */
+.dropdown-menu {
+    border: none !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+.notification-item {
+    transition: background-color 0.2s ease;
+}
+
+.notification-item:hover {
+    background-color: #f8f9fa !important;
+}
+
+/* Logo dan Beranda tidak berubah warna saat hover */
+.sidebar a[href="{{ route('dashboard') }}"]:hover,
+.sidebar a[href="{{ route('dashboard') }}"]:hover h5 {
+    color: #ffffff !important;
+}
+
+/* Layout fixes */
+.container-fluid {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* Ensure header is always visible */
+body > nav {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Main content area */
+.flex-grow-1 {
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+main.flex-grow-1 {
+    flex: 1 !important;
+    overflow-y: auto !important;
+}
+
+/* Responsive fixes */
+@media (max-width: 768px) {
+    .sidebar-custom {
+        width: 100% !important;
+        min-height: auto !important;
+    }
+} 
