@@ -20,4 +20,5 @@ return [
     'for_course' => 'Untuk Kuliah',
     'for_research' => 'Untuk Penelitian',
     'for_internship' => 'Untuk Magang',
+    'Cuti' => 'Cuti',
 ]; 

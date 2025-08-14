@@ -1,62 +1,104 @@
-@extends('loginPage')
-@section('login')
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Web Polri</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Custom CSS -->
     <link rel="stylesheet" href="/css/login.css">
-
-    <section class="background-radial-gradient overflow-hidden min-vh-100 d-flex align-items-center justify-content-center position-relative">
-        <div id="radius-shape-1"></div>
-        <div id="radius-shape-2"></div>
-
-        <script>
-            document.addEventListener("DOMContentLoaded", function () {
-                function createShootingStar() {
-                    let star = document.createElement("div");
-                    star.classList.add("shooting-star");
-                    star.style.left = Math.random() * 100 + "vw";
-                    star.style.top = Math.random() * -10 + "vh";
-                    star.style.animationDuration = (Math.random() * 2 + 1.5) + "s";
-                    document.body.appendChild(star);
-                    setTimeout(() => star.remove(), 2000);
-                }
-                setInterval(createShootingStar, 700);
-            });
-        </script>
-
-        <div class="container d-flex justify-content-center align-items-center" style="min-height: 100vh;">
-            <div class="row w-100 justify-content-center">
-                <div class="col-12 col-sm-8 col-md-6 col-lg-4">
-                    <div class="card bg-glass" style="border-radius: 1rem;">
-                        <div class="card-body p-4 p-lg-5 text-black">
-                            <form method="POST" action="{{ route('login.post') }}">
-                                @csrf
-                                <div class="d-flex align-items-center mb-3 pb-1 justify-content-center">
-                                    <img src="/img/logo.png" alt="Logo" class="me-3" style="height: 50px;">
-                                </div>
-                                <h5 class="fw-normal mb-3 pb-3 text-center" style="letter-spacing: 1px;">{{ __('messages.login_title') }}
-                                </h5>
-                                @if (session('error'))
-                                    <div class="alert alert-danger" role="alert">
-                                        {{ session('error') }}
-                                    </div>
-                                @endif
-                                <div class="form-outline mb-4">
-                                    <label class="form-label fw-bold" for="username">{{ __('messages.username') }}</label>
-                                    <input type="text" id="username" class="form-control form-control-lg"
-                                        name="username" required placeholder="{{ __('messages.username_placeholder') }}" />
-                                </div>
-                                <div class="form-outline mb-4">
-                                    <label class="form-label fw-bold" for="password">{{ __('messages.password') }}</label>
-                                    <input type="password" id="password" class="form-control form-control-lg"
-                                        name="password" required placeholder="{{ __('messages.password_placeholder') }}" />
-                                </div>
-                                <div class="pt-1 mb-4">
-                                    <button class="btn btn-dark btn-lg btn-block w-100" type="submit">{{ __('messages.login_button') }}</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            </div>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <img src="/img/logo.png" alt="Logo" class="logo">
+            <h2>Polri DIV TIK</h2>
+            <p>Silakan login untuk melanjutkan</p>
         </div>
-    </section>
-@endsection
+
+        @if(session('error'))
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                {{ session('error') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        @endif
+
+        @if(session('success'))
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                {{ session('success') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        @endif
+
+        <form class="login-form" action="{{ route('login.post') }}" method="POST">
+            @csrf
+            <div class="form-group">
+                <label for="username">
+                    <i class="fas fa-user"></i> Username
+                </label>
+                <input type="text" 
+                       class="form-control @error('username') is-invalid @enderror" 
+                       id="username" 
+                       name="username" 
+                       value="{{ old('username') }}" 
+                       placeholder="Masukkan username" 
+                       required 
+                       autofocus>
+                @error('username')
+                    <div class="invalid-feedback">{{ $message }}</div>
+                @enderror
+            </div>
+
+            <div class="form-group">
+                <label for="password">
+                    <i class="fas fa-lock"></i> Password
+                </label>
+                <input type="password" 
+                       class="form-control @error('password') is-invalid @enderror" 
+                       id="password" 
+                       name="password" 
+                       placeholder="Masukkan password" 
+                       required>
+                @error('password')
+                    <div class="invalid-feedback">{{ $message }}</div>
+                @enderror
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-sign-in-alt"></i> Login
+            </button>
+        </form>
+
+        <div class="text-center mt-4">
+            <small class="text-muted">
+                &copy; 2025 Web Polri. All rights reserved.
+            </small>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Add loading state to form submission
+        document.querySelector('.login-form').addEventListener('submit', function(e) {
+            const button = this.querySelector('.btn-primary');
+            button.classList.add('loading');
+            button.disabled = true;
+        });
+
+        // Auto-hide alerts after 5 seconds
+        setTimeout(function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(function(alert) {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    </script>
+</body>
+</html>
