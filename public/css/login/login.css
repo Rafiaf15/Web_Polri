@@ -4,7 +4,7 @@
     object-fit: cover;
 }
 
-.background-radial-gradient {
+.background-image {
     background: url('/img/bg.jpeg') no-repeat center center fixed;
     background-size: cover;
     object-fit: cover;

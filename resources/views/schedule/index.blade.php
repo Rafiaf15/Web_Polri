@@ -10,9 +10,14 @@
         <h1 class="h2">
             <i class="bi bi-calendar-check me-2"></i>Jadwal Edit
         </h1>
-        <a href="{{ route('schedule.create') }}" class="btn btn-primary">
-            <i class="bi bi-plus-circle me-1"></i>Tambah Jadwal
-        </a>
+        <div class="d-flex gap-2">
+            <a href="{{ route('schedule.import-pdf') }}" class="btn btn-success">
+                <i class="bi bi-file-earmark-pdf me-1"></i>Import PDF
+            </a>
+            <a href="{{ route('schedule.create') }}" class="btn btn-primary">
+                <i class="bi bi-plus-circle me-1"></i>Tambah Jadwal
+            </a>
+        </div>
     </div>
 
     <!-- Alert Warning untuk Jadwal yang Bentrok -->

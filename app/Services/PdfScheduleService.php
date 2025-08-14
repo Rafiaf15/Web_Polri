@@ -2,461 +2,411 @@
 
 namespace App\Services;
 
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
-use App\Models\Schedule;
 use Carbon\Carbon;
+use Smalot\PdfParser\Parser;
+use Illuminate\Support\Facades\Log;
 
 class PdfScheduleService
 {
     /**
-     * Ekstrak jadwal dari file PDF
+     * Import jadwal dari PDF
      */
-    public static function extractScheduleFromPdf(UploadedFile $pdfFile)
+    public static function importFromPdf($file)
     {
-        // Simpan file PDF sementara
-        $tempPath = $pdfFile->store('temp', 'local');
-        $fullPath = Storage::disk('local')->path($tempPath);
-        
-        try {
-            // Ekstrak teks dari PDF
-            $text = self::extractTextFromPdf($fullPath);
-            
-            // Parse jadwal dari teks
-            $schedules = self::parseScheduleFromText($text);
-            
-            // Hapus file sementara
-            Storage::disk('local')->delete($tempPath);
-            
-            return $schedules;
-        } catch (\Exception $e) {
-            // Hapus file sementara jika terjadi error
-            Storage::disk('local')->delete($tempPath);
-            throw $e;
-        }
-    }
-    
-    /**
-     * Ekstrak teks dari file PDF
-     */
-    private static function extractTextFromPdf($pdfPath)
-    {
-        try {
-            $parser = new \Smalot\PdfParser\Parser();
-            $pdf = $parser->parseFile($pdfPath);
-            $text = $pdf->getText();
-            
-            // Debug: log teks yang diekstrak
-            \Log::info('PDF Text extracted:', ['text' => $text]);
-            
-            // Jika teks kosong, throw exception
-            if (empty(trim($text))) {
-                throw new \Exception('Tidak dapat mengekstrak teks dari PDF. File mungkin kosong atau tidak dapat dibaca.');
+        $extractedData = self::debugExtractedData($file);
+        $parsedSchedules = $extractedData['parsed_schedules'];
+
+        $imported = 0;
+        $errors = [];
+        $warnings = [];
+
+        foreach ($parsedSchedules as $schedule) {
+            // Check validation dari Python script
+            if (isset($extractedData['validation']['warnings'])) {
+                $warnings = array_merge($warnings, $extractedData['validation']['warnings']);
             }
-            
-            return $text;
-        } catch (\Exception $e) {
-            \Log::error('PDF extraction error:', ['error' => $e->getMessage()]);
-            throw new \Exception('Gagal mengekstrak teks dari PDF: ' . $e->getMessage());
-        }
-    }
-    
-    /**
-     * Sample data untuk demo
-     */
-    private static function getSamplePdfText()
-    {
-        return "Senin, 15 Jan 2024 | 08:00-10:00 | Ruang A | Rapat Koordinasi
-Selasa, 16 Jan 2024 | 14:00-16:00 | Ruang B | Meeting Tim
-Rabu, 17 Jan 2024 | 09:00-11:00 | Ruang C | Presentasi Proyek
-Kamis, 18 Jan 2024 | 13:00-15:00 | Ruang A | Training
-Jumat, 19 Jan 2024 | 10:00-12:00 | Ruang B | Rapat Evaluasi";
-    }
-    
-    /**
-     * Debug method untuk melihat data yang diparse
-     */
-    public static function debugExtractedData(UploadedFile $pdfFile)
-    {
-        // Simpan file PDF sementara
-        $tempPath = $pdfFile->store('temp', 'local');
-        $fullPath = Storage::disk('local')->path($tempPath);
-        
-        try {
-            // Ekstrak teks dari PDF
-            $text = self::extractTextFromPdf($fullPath);
-            
-            // Parse jadwal dari teks
-            $schedules = self::parseScheduleFromText($text);
-            
-            // Hapus file sementara
-            Storage::disk('local')->delete($tempPath);
-            
-            return [
-                'raw_text' => $text,
-                'parsed_schedules' => $schedules,
-                'count' => count($schedules)
-            ];
-        } catch (\Exception $e) {
-            // Hapus file sementara jika terjadi error
-            Storage::disk('local')->delete($tempPath);
-            throw $e;
-        }
-    }
-    
-    /**
-     * Parse jadwal dari teks yang diekstrak
-     */
-    private static function parseScheduleFromText($text)
-    {
-        try {
-            $schedules = [];
-            $lines = explode("\n", $text);
-            // Proses per baris
-            foreach ($lines as $line) {
-                try {
-                    $schedule = self::parseLine($line);
-                    if ($schedule) {
-                        $schedules[] = $schedule;
-                    }
-                } catch (\Exception $e) {
-                    \Log::error('Error parsing line: ' . $e->getMessage());
-                    continue;
-                }
-            }
-            // Jika tidak ada yang ditemukan, coba regex pada seluruh teks
-            if (count($schedules) === 0) {
-                $patterns = [
-                    // Format: Surat Undangan OSIS (lebih fleksibel)
-                    '/Hari\s*\/\s*Tanggal\s*:?\s*(\w+),\s*(\d{1,2}\s+\w+\s+\d{4})\s*Waktu\s*:?\s*(?:Pukul\s*)?([0-9.]+)\s*WIB.*?Tempat\s*:?\s*([^\n]+)/i',
-                    // Tambahan pola longgar untuk menangani variasi teks
-                    '/Hari.*?Tanggal\s*:?\s*(\w+),\s*(\d{1,2}\s+\w+\s+\d{4}).*?Waktu\s*:?\s*(?:Pukul\s*)?([0-9.]+).*?Tempat\s*:?\s*([^\n]+)/i',
-                    '/(\w+),\s*(\d{1,2}\s+\w+\s+\d{4}).*?([0-9.]+).*?([^\n]+)/i',
-                    // Pola fallback yang sangat longgar
-                    '/(\w+),?\s*(\d{1,2}\s+\w+\s+\d{4})?.*?([0-9]{1,2}[:.]?[0-9]{2}-[0-9]{1,2}[:.]?[0-9]{2}).*?([A-Za-z0-9\s]+)/i',
-                    // Pola baru untuk format surat undangan dengan teks bebas
-                    '/Hari\/Tanggal\s*:\s*(\w+),\s*(\d{1,2}\s+\w+\s+\d{4}).*?Waktu\s*:\s*Pukul\s*([0-9.]+)\s*WIB.*?Tempat\s*:\s*([^\n]+)/i',
+
+            if (self::hasIncompleteData($schedule)) {
+                $errors[] = [
+                    'schedule' => $schedule,
+                    'error' => 'Incomplete data',
+                    'missing_fields' => self::getMissingFields($schedule)
                 ];
-                foreach ($patterns as $pattern) {
-                    try {
-                        if (preg_match($pattern, $text, $matches)) {
-                            $day = isset($matches[1]) ? trim($matches[1]) : 'N/A';
-                            $date = isset($matches[2]) ? self::parseDate($matches[2]) : null;
-                            $time = isset($matches[3]) ? str_replace('.', ':', trim($matches[3])) . ':00' : null;
-                            $room = isset($matches[4]) ? trim($matches[4]) : 'N/A';
-                            $activity = 'Undangan Rapat/Acara';
-                            $schedules[] = [
-                                'day' => $day,
-                                'date' => $date,
-                                'time' => $time,
-                                'room' => $room,
-                                'activities' => [
-                                    [
-                                        'activity' => $activity,
-                                        'time' => $time
-                                    ]
-                                ]
-                            ];
-                        }
-                    } catch (\Exception $e) {
-                        \Log::error('Regex pattern error: ' . $e->getMessage());
-                        continue;
-                    }
-                }
-                // Jika masih kosong, coba parse dengan metode khusus untuk surat undangan
-                if (count($schedules) === 0) {
-                    $customSchedule = self::parseScheduleFromLetterText($text);
-                    if ($customSchedule) {
-                        $schedules[] = $customSchedule;
-                    }
-                }
+                continue;
             }
-            return $schedules;
-        } catch (\Exception $e) {
-            \Log::error('Error parsing schedule from text: ' . $e->getMessage());
-            return [];
+
+            try {
+                \App\Models\Schedule::create($schedule);
+                $imported++;
+            } catch (\Exception $e) {
+                $errors[] = [
+                    'schedule' => $schedule,
+                    'error' => $e->getMessage()
+                ];
+            }
         }
+
+        return [
+            'total' => count($parsedSchedules),
+            'imported' => $imported,
+            'errors' => $errors,
+            'warnings' => $warnings,
+            'extraction_info' => [
+                'items_found' => $extractedData['items_found'] ?? 0,
+                'extraction_success' => $extractedData['extraction_success'] ?? false,
+                'text_length' => $extractedData['raw_text_length'] ?? 0
+            ]
+        ];
     }
-    
+
     /**
-     * Parse satu baris teks menjadi jadwal
+     * Mengecek apakah data jadwal belum lengkap
      */
-    private static function parseLine($line)
+    public static function hasIncompleteData($schedule)
     {
-        try {
-            // Bersihkan line
-            $line = trim($line);
-            if (empty($line)) {
-                return null;
+        $requiredFields = ['day', 'date', 'time', 'room', 'activities'];
+        
+        foreach ($requiredFields as $field) {
+            if (empty($schedule[$field])) {
+                return true;
             }
-            
-            // Pattern untuk mencocokkan format jadwal
-            // Contoh format: "Senin, 15 Jan 2024 | 08:00-10:00 | Ruang A | Rapat Koordinasi"
-            $patterns = [
-                // Format: Hari, Tanggal | Waktu | Ruang | Kegiatan
-                '/(\w+),\s*(\d{1,2}\s+\w+\s+\d{4})\s*\|\s*(\d{2}:\d{2}-\d{2}:\d{2})\s*\|\s*([^|]+)\s*\|\s*(.+)/',
-                
-                // Format: Tanggal | Waktu | Ruang | Kegiatan
-                '/(\d{1,2}\/\d{1,2}\/\d{4})\s*\|\s*(\d{2}:\d{2}-\d{2}:\d{2})\s*\|\s*([^|]+)\s*\|\s*(.+)/',
-                
-                // Format: Tanggal | Waktu | Ruang | Kegiatan (tanpa separator)
-                '/(\d{1,2}\/\d{1,2}\/\d{4})\s+(\d{2}:\d{2}-\d{2}:\d{2})\s+([^\s]+)\s+(.+)/',
-                // Format: Surat Undangan OSIS
-                '/Hari\/Tanggal\s*:\s*(\w+),\s*(\d{1,2}\s+\w+\s+\d{4})\s*Waktu\s*:\s*Pukul\s*([0-9.]+)\s*WIB.*Tempat\s*:\s*([^\n]+)/i',
-                // Tambahan pola longgar untuk menangani variasi teks
-                '/Hari.*?Tanggal\s*:\s*(\w+),\s*(\d{1,2}\s+\w+\s+\d{4}).*?Waktu\s*:\s*Pukul\s*([0-9.]+).*?Tempat\s*:\s*([^\n]+)/i',
-                '/(\w+),\s*(\d{1,2}\s+\w+\s+\d{4}).*?([0-9.]+).*?([^\n]+)/i',
-                // Pola fallback yang sangat longgar
-                '/(\w+),?\s*(\d{1,2}\s+\w+\s+\d{4})?.*?([0-9]{1,2}[:.]?[0-9]{2}-[0-9]{1,2}[:.]?[0-9]{2}).*?([A-Za-z0-9\s]+)/i',
+        }
+
+        // Khusus untuk activities, pastikan array tidak kosong
+        if (is_array($schedule['activities']) && count($schedule['activities']) === 0) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Mendapatkan field yang hilang dari schedule
+     */
+    public static function getMissingFields($schedule)
+    {
+        $requiredFields = ['day', 'date', 'time', 'room', 'activities'];
+        $missingFields = [];
+
+        foreach ($requiredFields as $field) {
+            if (empty($schedule[$field])) {
+                $missingFields[] = $field;
+            }
+        }
+
+        return $missingFields;
+    }
+
+    /**
+     * Ekstrak data dari PDF untuk debug
+     */
+    public static function debugExtractedData($file)
+    {
+        $parser = new Parser();
+        $pdf = $parser->parseFile($file->getRealPath());
+        $text = $pdf->getText();
+
+        // Parsing menggunakan script Python yang sudah diperbaiki
+        $parsed = self::parseSchedules($text);
+
+        return [
+            'raw_text' => $text,
+            'parsed_schedules' => $parsed['schedules'] ?? [],
+            'items_found' => $parsed['items_found'] ?? 0,
+            'extraction_success' => $parsed['extraction_success'] ?? false,
+            'raw_text_length' => $parsed['raw_text_length'] ?? 0,
+            'validation' => $parsed['validation'] ?? [],
+            'debug' => $parsed['debug'] ?? []
+        ];
+    }
+
+    /**
+     * Parsing jadwal dari teks PDF menggunakan script Python yang diperbaiki
+     */
+    private static function parseSchedules($text)
+    {
+        $scriptPath = base_path('python/extract_schedule.py'); // script Python
+
+        // Pastikan UTF-8
+        $text = mb_convert_encoding($text, 'UTF-8', 'auto');
+
+        if (!file_exists($scriptPath)) {
+            Log::error("Python script not found: " . $scriptPath);
+            return [
+                'schedules' => [],
+                'extraction_success' => false,
+                'items_found' => 0
             ];
-            
-            foreach ($patterns as $pattern) {
-                try {
-                    if (preg_match($pattern, $line, $matches)) {
-                        // Pola undangan OSIS
-                        if (strpos($pattern, 'Hari/Tanggal') !== false) {
-                            $day = trim($matches[1]);
-                            $date = self::parseDate($matches[2]);
-                            $time = trim($matches[3]) . ':00'; // Ubah 15.00 jadi 15:00:00
-                            $room = trim($matches[4]);
-                            $activity = 'Undangan Rapat/Acara';
-                            return [
-                                'day' => $day,
-                                'date' => $date,
-                                'time' => $time,
-                                'room' => $room,
-                                'activities' => [
-                                    [
-                                        'activity' => $activity,
-                                        'time' => $time
-                                    ]
-                                ]
-                            ];
-                        }
-                        $schedule = self::createScheduleFromMatches($matches, $pattern);
-                        if ($schedule) {
-                            return $schedule;
-                        }
-                    }
-                } catch (\Exception $e) {
-                    \Log::error('Regex pattern error: ' . $e->getMessage());
-                    continue;
+        }
+
+        // Jalankan Python script via stdin (lebih aman dari file temp)
+        $descriptorspec = [
+            0 => ["pipe", "r"],  // stdin
+            1 => ["pipe", "w"],  // stdout
+            2 => ["pipe", "w"]   // stderr
+        ];
+
+        // Prefer 'python' on Windows; fallback to 'python3'
+        $commands = [
+            'python ' . escapeshellarg($scriptPath),
+            'python3 ' . escapeshellarg($scriptPath)
+        ];
+
+        $process = null;
+        $cmdUsed = null;
+        foreach ($commands as $candidate) {
+            $tmp = @proc_open($candidate, $descriptorspec, $pipes);
+            if (is_resource($tmp)) {
+                $process = $tmp;
+                $cmdUsed = $candidate;
+                break;
+            }
+        }
+
+        if (!is_resource($process)) {
+            Log::error("Failed to start Python process (tried: " . implode(', ', $commands) . ")");
+            return [
+                'schedules' => [],
+                'extraction_success' => false,
+                'items_found' => 0
+            ];
+        }
+
+        // Kirim teks ke stdin
+        fwrite($pipes[0], $text);
+        fclose($pipes[0]);
+
+        // Baca output
+        $output = stream_get_contents($pipes[1]);
+        $errors = stream_get_contents($pipes[2]);
+        
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        
+        $returnValue = proc_close($process);
+
+        if ($returnValue !== 0) {
+            Log::error("Python script failed (cmd: {$cmdUsed}) with return code: $returnValue, errors: $errors");
+            return [
+                'schedules' => [],
+                'extraction_success' => false,
+                'items_found' => 0
+            ];
+        }
+
+        if (!$output) {
+            Log::error("Python script returned no output");
+            return [
+                'schedules' => [],
+                'extraction_success' => false,
+                'items_found' => 0
+            ];
+        }
+
+        $data = json_decode($output, true);
+
+        if (!$data) {
+            Log::error("Failed to parse Python script output as JSON");
+            return [
+                'schedules' => [],
+                'extraction_success' => false,
+                'items_found' => 0
+            ];
+        }
+
+        // Gunakan struktur baru dari Python script
+        $schedules = [];
+        
+        if (isset($data['schedule_items']) && is_array($data['schedule_items'])) {
+            // Format baru: gunakan schedule_items
+            foreach ($data['schedule_items'] as $item) {
+                $schedule = self::convertItemToSchedule($item);
+                if ($schedule) {
+                    $schedules[] = $schedule;
                 }
             }
-            
-            return null;
-        } catch (\Exception $e) {
-            // Jika terjadi error, return null
-            \Log::error('Error parsing line: ' . $e->getMessage());
+        } else {
+            // Fallback ke format lama untuk kompatibilitas
+            $schedules = self::convertLegacyFormat($data);
+        }
+
+        return [
+            'schedules' => $schedules,
+            'extraction_success' => $data['extraction_success'] ?? false,
+            'items_found' => $data['items_found'] ?? count($schedules),
+            'raw_text_length' => $data['raw_text_length'] ?? 0,
+            'validation' => $data['validation'] ?? [],
+            'debug' => $data['debug'] ?? []
+        ];
+    }
+
+    /**
+     * Konversi item dari format Python ke format Schedule model
+     */
+    private static function convertItemToSchedule($item)
+    {
+        $date = self::parseDate($item['date'] ?? '');
+        $day = $item['day'] ?? '';
+        $time = $item['time'] ?? '';
+        $room = $item['location'] ?? '';
+        $activity = $item['activity'] ?? 'Tidak ada keterangan kegiatan';
+
+        // Skip jika data penting tidak ada
+        if (!$date || !$time || !$room) {
             return null;
         }
+
+        // Jika day kosong, coba deduce dari tanggal
+        if (empty($day) && $date) {
+            try {
+                $carbonDate = Carbon::parse($date);
+                $day = self::getDayNameInIndonesian($carbonDate->dayOfWeek);
+            } catch (\Exception $e) {
+                Log::warning("Could not parse date to get day: " . $e->getMessage());
+            }
+        }
+
+        return [
+            'day' => $day,
+            'date' => $date,
+            'time' => $time,
+            'room' => $room,
+            'activities' => [
+                ['activity' => $activity, 'time' => $time]
+            ]
+        ];
     }
-    
+
     /**
-     * Buat objek jadwal dari hasil regex
+     * Konversi format lama untuk backward compatibility
      */
-    private static function createScheduleFromMatches($matches, $pattern)
+    private static function convertLegacyFormat($data)
     {
-        try {
-            // Pattern 1: Hari, Tanggal | Waktu | Ruang | Kegiatan
-            if (strpos($pattern, '(\w+),\s*(\d{1,2}\s+\w+\s+\d{4})') !== false) {
-                $day = trim($matches[1]);
-                $date = self::parseDate($matches[2]);
-                $time = trim($matches[3]);
-                $room = trim($matches[4]);
-                $activity = trim($matches[5]);
-                
-                return [
+        $schedules = [];
+        $maxCount = max(
+            count($data['dates'] ?? []),
+            count($data['times'] ?? []),
+            count($data['locations'] ?? []),
+            count($data['activities'] ?? []),
+            count($data['days'] ?? [])
+        );
+
+        for ($i = 0; $i < $maxCount; $i++) {
+            $day = $data['days'][$i] ?? $data['days'][0] ?? '';
+            $date = isset($data['dates'][$i]) ? self::parseDate($data['dates'][$i]) : null;
+            $time = $data['times'][$i] ?? $data['times'][0] ?? '';
+            $room = $data['locations'][$i] ?? $data['locations'][0] ?? '';
+            $activityText = $data['activities'][$i] ?? $data['activities'][0] ?? 'Tidak ada keterangan kegiatan';
+
+            if ($date && $time && $room) {
+                $schedules[] = [
                     'day' => $day,
                     'date' => $date,
                     'time' => $time,
                     'room' => $room,
                     'activities' => [
-                        [
-                            'activity' => $activity,
-                            'time' => $time
-                        ]
+                        ['activity' => $activityText, 'time' => $time]
                     ]
                 ];
             }
-            
-            // Pattern 2 & 3: Tanggal | Waktu | Ruang | Kegiatan
-            $date = self::parseDate($matches[1]);
-            $time = trim($matches[2]);
-            $room = trim($matches[3]);
-            $activity = trim($matches[4]);
-            
-            // Tentukan hari berdasarkan tanggal
-            $day = self::getDayFromDate($date);
-            
-            return [
-                'day' => $day,
-                'date' => $date,
-                'time' => $time,
-                'room' => $room,
-                'activities' => [
-                    [
-                        'activity' => $activity,
-                        'time' => $time
-                    ]
-                ]
-            ];
-        } catch (\Exception $e) {
-            // Jika terjadi error, return null
-            \Log::error('Error creating schedule from matches: ' . $e->getMessage());
-            return null;
         }
-    }
-    
-    /**
-     * Parse tanggal dari berbagai format
-     */
-    private static function parseDate($dateString)
-    {
-        // Bersihkan string tanggal
-        $dateString = trim($dateString);
-        
-        // Coba berbagai format tanggal
-        $formats = [
-            'd/m/Y',
-            'd-m-Y',
-            'd M Y',
-            'd F Y',
-            'Y-m-d',
-        ];
-        
-        foreach ($formats as $format) {
-            try {
-                $date = Carbon::createFromFormat($format, $dateString);
-                if ($date && $date->year > 1900 && $date->year < 2100) {
-                    return $date->format('Y-m-d');
-                }
-            } catch (\Exception $e) {
-                // Lanjut ke format berikutnya
-                continue;
-            }
-        }
-        
-        // Jika tidak ada format yang cocok, coba parse dengan Carbon::parse
-        try {
-            $date = Carbon::parse($dateString);
-            if ($date && $date->year > 1900 && $date->year < 2100) {
-                return $date->format('Y-m-d');
-            }
-        } catch (\Exception $e) {
-            // Jika semua gagal, return tanggal hari ini
-            return Carbon::now()->format('Y-m-d');
-        }
-        
-        // Fallback ke tanggal hari ini
-        return Carbon::now()->format('Y-m-d');
-    }
-    
-    /**
-     * Dapatkan nama hari dari tanggal
-     */
-    private static function getDayFromDate($date)
-    {
-        try {
-            $carbon = Carbon::parse($date);
-            $days = [
-                1 => 'Senin',
-                2 => 'Selasa', 
-                3 => 'Rabu',
-                4 => 'Kamis',
-                5 => 'Jumat',
-                6 => 'Sabtu',
-                0 => 'Minggu'
-            ];
-            
-            return $days[$carbon->dayOfWeek] ?? 'Senin';
-        } catch (\Exception $e) {
-            // Jika gagal parse tanggal, return hari ini
-            $today = Carbon::now();
-            $days = [
-                1 => 'Senin',
-                2 => 'Selasa', 
-                3 => 'Rabu',
-                4 => 'Kamis',
-                5 => 'Jumat',
-                6 => 'Sabtu',
-                0 => 'Minggu'
-            ];
-            
-            return $days[$today->dayOfWeek];
-        }
-    }
-    
-    /**
-     * Import jadwal dari PDF ke database
-     */
-    public static function importFromPdf(UploadedFile $pdfFile)
-    {
-        $schedules = self::extractScheduleFromPdf($pdfFile);
-        $imported = 0;
-        $errors = [];
-        
-        foreach ($schedules as $scheduleData) {
-            try {
-                // Cek apakah jadwal sudah ada
-                $existing = Schedule::where('date', $scheduleData['date'])
-                    ->where('room', $scheduleData['room'])
-                    ->where('time', $scheduleData['time'])
-                    ->first();
-                
-                if (!$existing) {
-                    Schedule::create($scheduleData);
-                    $imported++;
-                }
-            } catch (\Exception $e) {
-                $errors[] = "Error importing schedule: " . $e->getMessage();
-            }
-        }
-        
-        return [
-            'imported' => $imported,
-            'errors' => $errors,
-            'total' => count($schedules)
-        ];
+
+        return $schedules;
     }
 
     /**
-     * Debug method untuk menguji regex secara manual
+     * Mengubah string tanggal menjadi format Y-m-d
+     */
+    private static function parseDate($dateStr)
+    {
+        if (empty($dateStr)) {
+            return null;
+        }
+
+        try {
+            $dateStr = trim($dateStr);
+
+            // Format DD/MM/YYYY
+            if (preg_match('/^\d{1,2}\/\d{1,2}\/\d{4}$/', $dateStr)) {
+                return Carbon::createFromFormat('d/m/Y', $dateStr)->format('Y-m-d');
+            }
+            
+            // Format DD-MM-YYYY
+            if (preg_match('/^\d{1,2}-\d{1,2}-\d{4}$/', $dateStr)) {
+                return Carbon::createFromFormat('d-m-Y', $dateStr)->format('Y-m-d');
+            }
+            
+            // Format Indonesia: "15 Januari 2024"
+            if (preg_match('/^\d{1,2}\s+\w+\s+\d{4}$/', $dateStr)) {
+                $monthMap = [
+                    'Januari' => 'January', 'Februari' => 'February', 'Maret' => 'March',
+                    'April' => 'April', 'Mei' => 'May', 'Juni' => 'June',
+                    'Juli' => 'July', 'Agustus' => 'August', 'September' => 'September',
+                    'Oktober' => 'October', 'November' => 'November', 'Desember' => 'December'
+                ];
+                
+                foreach ($monthMap as $indo => $eng) {
+                    $dateStr = str_replace($indo, $eng, $dateStr);
+                }
+            }
+            
+            // Fallback: gunakan Carbon parse
+            return Carbon::parse($dateStr)->format('Y-m-d');
+            
+        } catch (\Exception $e) {
+            Log::error("Parse date error for '$dateStr': " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Mendapatkan nama hari dalam bahasa Indonesia
+     */
+    private static function getDayNameInIndonesian($dayOfWeek)
+    {
+        $days = [
+            0 => 'Minggu',
+            1 => 'Senin', 
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu'
+        ];
+
+        return $days[$dayOfWeek] ?? '';
+    }
+
+    /**
+     * Uji regex secara manual (untuk debugging)
      */
     public static function debugRegexTest($text)
     {
+        // Tetap mempertahankan fungsi debug regex lama untuk compatibility
         $patterns = [
-            // Format: Surat Undangan OSIS (lebih fleksibel)
-            '/Hari\s*\/\s*Tanggal\s*:?\s*(\w+),\s*(\d{1,2}\s+\w+\s+\d{4})\s*Waktu\s*:?\s*(?:Pukul\s*)?([0-9.]+)\s*WIB.*?Tempat\s*:?\s*([^\n]+)/i',
-            // Pattern yang lebih longgar
-            '/Hari.*?Tanggal\s*:?\s*(\w+),\s*(\d{1,2}\s+\w+\s+\d{4}).*?Waktu\s*:?\s*(?:Pukul\s*)?([0-9.]+).*?Tempat\s*:?\s*([^\n]+)/i',
-            // Pattern yang sangat longgar
-            '/(\w+),\s*(\d{1,2}\s+\w+\s+\d{4}).*?([0-9.]+).*?([^\n]+)/i',
-            // Pola fallback yang sangat longgar
-            '/(\w+),?\s*(\d{1,2}\s+\w+\s+\d{4})?.*?([0-9]{1,2}[:.]?[0-9]{2}-[0-9]{1,2}[:.]?[0-9]{2}).*?([A-Za-z0-9\s]+)/i',
+            '/(?<day>[A-Za-z]+),\s*(?<date>\d{1,2} [A-Za-z]+ \d{4})\s*\|\s*(?<time>\d{2}:\d{2}-\d{2}:\d{2})\s*\|\s*(?<room>[^|]+)\|\s*(?<activity>.+)/',
+            '/(?<date>\d{2}\/\d{2}\/\d{4})\s*\|\s*(?<time>\d{2}:\d{2}-\d{2}:\d{2})\s*\|\s*(?<room>[^|]+)\|\s*(?<activity>.+)/',
+            '/(?<date>\d{2}\/\d{2}\/\d{4})\s*(?<time>\d{2}:\d{2}-\d{2}:\d{2})\s*(?<room>\S+)\s*(?<activity>.+)/'
         ];
-        
+
         $results = [];
+
         foreach ($patterns as $index => $pattern) {
-            try {
-                if (preg_match($pattern, $text, $matches)) {
-                    $results[] = [
-                        'pattern_index' => $index,
-                        'matches' => $matches,
-                        'pattern' => $pattern
-                    ];
-                }
-            } catch (\Exception $e) {
-                \Log::error('Regex debug pattern error: ' . $e->getMessage());
-                continue;
+            preg_match_all($pattern, $text, $matches, PREG_SET_ORDER);
+            if (!empty($matches)) {
+                $results[] = [
+                    'pattern_index' => $index,
+                    'matches' => $matches
+                ];
             }
         }
-        
+
         return [
-            'text' => $text,
             'text_length' => strlen($text),
+            'text' => $text,
             'regex_results' => $results,
-            'patterns_tested' => count($patterns)
+            'patterns_tested' => count($patterns),
+            'recommendation' => 'Use Python script for better extraction results'
         ];
     }
 }
