@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Cuti;
+use App\Models\Member;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use App\Services\NotificationService;
@@ -15,17 +16,23 @@ class CutiController extends Controller
      */
     public function index()
     {
-        $user = Auth::user();
-        
-        if ($user->role === 'administrator') {
-            // Admin melihat semua cuti
-            $cutis = Cuti::with('user')->orderBy('created_at', 'desc')->get();
-        } else {
-            // User biasa hanya melihat cuti sendiri
-            $cutis = Cuti::where('user_id', $user->id)->orderBy('created_at', 'desc')->get();
-        }
-        
-        return view('cuti.index', compact('cutis'));
+        // Tampilkan sisa jatah cuti per anggota, bukan form pengajuan
+        $year = (int) now()->year;
+        $members = Member::orderBy('name')->get();
+
+        $rows = $members->map(function (Member $m) use ($year) {
+            return [
+                'member' => $m,
+                'used' => $m->getUsedLeaveDaysForYear($year),
+                'remaining' => $m->getRemainingLeaveDaysForYear($year),
+                'quota' => $m->annual_quota,
+            ];
+        });
+
+        return view('cuti.sisa', [
+            'rows' => $rows,
+            'year' => $year
+        ]);
     }
 
     /**

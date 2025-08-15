@@ -102,7 +102,7 @@
                     </thead>
                     <tbody>
                         @forelse($schedules as $index => $schedule)
-                        <tr class="{{ $schedule->status === 'conflict' ? 'table-warning' : '' }}">
+                        <tr class="{{ $schedule->status === 'conflict' ? 'table-warning' : '' }} {{ request('highlight') == $schedule->id ? 'highlight-row' : '' }}" id="schedule-{{ $schedule->id }}">
                             <td>{{ $index + 1 }}</td>
                             <td>{{ $schedule->day }}</td>
                             <td>{{ $schedule->date->format('d-m-Y') }}</td>
@@ -128,6 +128,11 @@
                                     <a href="{{ route('schedule.edit', $schedule->id) }}" class="btn btn-primary btn-sm">
                                         <i class="bi bi-pencil"></i>
                                     </a>
+                                    @if($schedule->source === 'pdf' && $schedule->pdf_path)
+                                    <button type="button" class="btn btn-info btn-sm" onclick="previewPdf('{{ $schedule->pdf_path }}', '{{ $schedule->pdf_filename }}')" title="Preview PDF">
+                                        <i class="bi bi-file-earmark-pdf"></i>
+                                    </button>
+                                    @endif
                                     <form action="{{ route('schedule.destroy', $schedule->id) }}" method="POST" class="d-inline">
                                         @csrf
                                         @method('DELETE')
@@ -149,4 +154,106 @@
         </div>
     </div>
 </div>
-@endsection 
+
+<!-- Modal Preview PDF -->
+<div class="modal fade" id="pdfPreviewModal" tabindex="-1" aria-labelledby="pdfPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pdfPreviewModalLabel">Preview PDF</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <iframe id="pdfPreviewFrame" style="width:100%;height:500px;border:0;" src=""></iframe>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                <a href="#" id="downloadPdfLink" class="btn btn-primary" download>
+                    <i class="bi bi-download me-1"></i>Download PDF
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+@endsection
+
+<style>
+.highlight-row {
+    background: linear-gradient(135deg, #e3f2fd, #bbdefb) !important;
+    border-left: 4px solid #2196f3 !important;
+    animation: highlightPulse 2s ease-in-out;
+}
+
+@keyframes highlightPulse {
+    0% { background: linear-gradient(135deg, #fff3e0, #ffe0b2); }
+    50% { background: linear-gradient(135deg, #e3f2fd, #bbdefb); }
+    100% { background: linear-gradient(135deg, #e3f2fd, #bbdefb); }
+}
+
+.highlight-row td {
+    font-weight: 600;
+    color: #1565c0;
+}
+
+.highlight-row .badge {
+    animation: badgePulse 1s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Cek apakah ada parameter highlight di URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const highlightId = urlParams.get('highlight');
+    
+    if (highlightId) {
+        const highlightedRow = document.getElementById('schedule-' + highlightId);
+        if (highlightedRow) {
+            // Scroll ke baris yang di-highlight
+            highlightedRow.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'center' 
+            });
+            
+            // Tambahkan class untuk animasi tambahan
+            setTimeout(() => {
+                highlightedRow.classList.add('highlight-active');
+            }, 500);
+            
+            // Hapus parameter highlight dari URL setelah 3 detik
+            setTimeout(() => {
+                const newUrl = new URL(window.location);
+                newUrl.searchParams.delete('highlight');
+                window.history.replaceState({}, '', newUrl);
+            }, 3000);
+        }
+    }
+});
+</script>
+
+<script>
+// Fungsi untuk preview PDF
+function previewPdf(pdfPath, filename) {
+    const modal = new bootstrap.Modal(document.getElementById('pdfPreviewModal'));
+    const iframe = document.getElementById('pdfPreviewFrame');
+    const downloadLink = document.getElementById('downloadPdfLink');
+    
+    // Set URL untuk preview dan download
+    const pdfUrl = `/storage/${pdfPath}`;
+    iframe.src = pdfUrl;
+    downloadLink.href = pdfUrl;
+    downloadLink.download = filename;
+    
+    // Update judul modal
+    document.getElementById('pdfPreviewModalLabel').textContent = `Preview PDF: ${filename}`;
+    
+    // Tampilkan modal
+    modal.show();
+}
+</script> 
