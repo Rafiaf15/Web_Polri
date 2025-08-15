@@ -13,35 +13,34 @@
 </head>
 <body>
     @if(session('success'))
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <div class="alert alert-success alert-dismissible fade show" role="alert" style="position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px;">
             {{ session('success') }}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     @endif
 
     @if(session('error'))
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <div class="alert alert-danger alert-dismissible fade show" role="alert" style="position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px;">
             {{ session('error') }}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     @endif
 
-    <div class="d-flex" style="min-height: 100vh;">
-        <!-- Sidebar -->
-        @yield('sidebar')
-        <!-- End Sidebar -->
+    <!-- Sidebar -->
+    @yield('sidebar')
+    <!-- End Sidebar -->
+    
+    <!-- Main Content -->
+    <div class="main-content" style="margin-left: 260px; min-height: 100vh;">
+        <!-- Header -->
+        @include('header')
+        <!-- End Header -->
         
-        <div class="flex-grow-1 d-flex flex-column">
-            <!-- Header -->
-            @include('header')
-            <!-- End Header -->
-            
-            <!-- Main Content -->
-            <main class="flex-grow-1">
-                @yield('content')
-            </main>
-            <!-- End Main Content -->
-        </div>
+        <!-- Content -->
+        <main class="flex-grow-1">
+            @yield('content')
+        </main>
+        <!-- End Content -->
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

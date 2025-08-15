@@ -37,24 +37,57 @@ class ScheduleController extends Controller
                 'time' => 'required|string',
                 'room' => 'required|string',
                 'activities' => 'required|array',
-                'activities.*.activity' => 'required|string',
-                'activities.*.time' => 'required|string'
+                'activities.*.activity' => 'required|string'
             ]);
 
-            $schedule = Schedule::create($validatedData);
-            
-            // Cek dan update status konflik
-            $schedule->forceUpdateConflictStatus();
-            
-            // Buat notifikasi untuk semua user
-            NotificationService::create(
-                'Jadwal Baru Ditambahkan',
-                "Jadwal {$schedule->day} ({$schedule->date->format('d-m-Y')}) berhasil ditambahkan oleh " . Auth::user()->name,
-                'success',
-                ['schedule_id' => $schedule->id]
-            );
+            // Process activities to add time from individual time fields
+            $activities = [];
+            foreach ($request->activities as $activity) {
+                $activities[] = [
+                    'activity' => $activity['activity'],
+                    'time' => $activity['time'] ?? $request->time // Use individual time or fallback to main time
+                ];
+            }
 
-            return redirect()->route('schedule.index')->with('success', 'Jadwal berhasil ditambahkan!');
+            // Check if schedule with same date already exists
+            $existingSchedule = Schedule::findByDate($validatedData['date']);
+            
+            if ($existingSchedule) {
+                // Merge activities with existing schedule
+                $existingSchedule->mergeActivities($activities);
+                
+                // Buat notifikasi untuk semua user
+                NotificationService::create(
+                    'Kegiatan Ditambahkan ke Jadwal',
+                    "Kegiatan baru ditambahkan ke jadwal {$existingSchedule->day} ({$existingSchedule->date->format('d-m-Y')}) oleh " . Auth::user()->name,
+                    'info',
+                    ['schedule_id' => $existingSchedule->id]
+                );
+
+                return redirect()->route('schedule.index')->with('success', 'Kegiatan berhasil ditambahkan ke jadwal yang sudah ada!');
+            } else {
+                // Create new schedule
+                $schedule = Schedule::create([
+                    'day' => $validatedData['day'],
+                    'date' => $validatedData['date'],
+                    'time' => $validatedData['time'],
+                    'room' => $validatedData['room'],
+                    'activities' => $activities
+                ]);
+                
+                // Cek dan update status konflik
+                $schedule->forceUpdateConflictStatus();
+                
+                // Buat notifikasi untuk semua user
+                NotificationService::create(
+                    'Jadwal Baru Ditambahkan',
+                    "Jadwal {$schedule->day} ({$schedule->date->format('d-m-Y')}) berhasil ditambahkan oleh " . Auth::user()->name,
+                    'success',
+                    ['schedule_id' => $schedule->id]
+                );
+
+                return redirect()->route('schedule.index')->with('success', 'Jadwal berhasil ditambahkan!');
+            }
         } catch (\Illuminate\Validation\ValidationException $e) {
             // Notifikasi untuk validasi gagal
             NotificationService::create(
@@ -88,14 +121,52 @@ class ScheduleController extends Controller
             'time' => 'required|string',
             'room' => 'required|string',
             'activities' => 'required|array',
-            'activities.*.activity' => 'required|string',
-            'activities.*.time' => 'required|string'
+            'activities.*.activity' => 'required|string'
         ]);
 
         $schedule = Schedule::findOrFail($id);
         
+        // Process activities to add time from individual time fields
+        $activities = [];
+        foreach ($request->activities as $activity) {
+            $activities[] = [
+                'activity' => $activity['activity'],
+                'time' => $activity['time'] ?? $request->time // Use individual time or fallback to main time
+            ];
+        }
+
+        // Check if date has changed and if there's already a schedule with the new date
+        if ($schedule->date->format('Y-m-d') !== $validatedData['date']) {
+            $existingSchedule = Schedule::findByDate($validatedData['date']);
+            
+            if ($existingSchedule && $existingSchedule->id !== $schedule->id) {
+                // Merge activities with existing schedule and delete current schedule
+                $existingSchedule->mergeActivities($activities);
+                $schedule->delete();
+                
+                // Update status jadwal lain yang mungkin terpengaruh
+                $this->updateRelatedSchedules($existingSchedule);
+                
+                // Buat notifikasi untuk semua user
+                NotificationService::create(
+                    'Jadwal Digabungkan',
+                    "Jadwal {$schedule->day} ({$schedule->date->format('d-m-Y')}) digabungkan dengan jadwal {$existingSchedule->day} ({$existingSchedule->date->format('d-m-Y')}) oleh " . Auth::user()->name,
+                    'info',
+                    ['schedule_id' => $existingSchedule->id]
+                );
+
+                return redirect()->route('schedule.index')->with('success', 'Jadwal berhasil digabungkan dengan jadwal yang sudah ada!');
+            }
+        }
+        
         // Update data jadwal
-        $schedule->update($validatedData);
+        $schedule->update([
+            'day' => $validatedData['day'],
+            'date' => $validatedData['date'],
+            'time' => $validatedData['time'],
+            'room' => $validatedData['room'],
+            'activities' => $activities
+        ]);
         
         // Refresh model untuk mendapatkan data terbaru
         $schedule->refresh();
@@ -142,7 +213,7 @@ class ScheduleController extends Controller
      */
     private function updateRelatedSchedules($currentSchedule)
     {
-        $relatedSchedules = Schedule::where('day', $currentSchedule->day)
+        $relatedSchedules = Schedule::where('date', $currentSchedule->date)
             ->where('id', '!=', $currentSchedule->id)
             ->get();
 
@@ -191,9 +262,13 @@ class ScheduleController extends Controller
         ]);
 
         try {
-            $result = PdfScheduleService::importFromPdf($request->file('pdf_file'));
+            // Simpan file PDF
+            $pdfPath = $request->file('pdf_file')->store('pdfs', 'public');
+            $pdfFilename = $request->file('pdf_file')->getClientOriginalName();
             
-            $message = "Berhasil mengimpor {$result['imported']} jadwal dari {$result['total']} data yang ditemukan.";
+            $result = PdfScheduleService::importFromPdf($request->file('pdf_file'), $pdfPath, $pdfFilename);
+            
+            $message = "Berhasil mengimpor {$result['imported']} jadwal baru dan menggabungkan {$result['merged']} jadwal dari {$result['total']} data yang ditemukan.";
             
             if (!empty($result['errors'])) {
                 $message .= " Terdapat " . count($result['errors']) . " error dalam proses import.";

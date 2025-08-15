@@ -27,6 +27,8 @@
                             <option value="Rabu">Rabu</option>
                             <option value="Kamis">Kamis</option>
                             <option value="Jumat">Jumat</option>
+                            <option value="Sabtu">Sabtu</option>
+                            <option value="Minggu">Minggu</option>
                         </select>
                     </div>
                     <div class="col-md-3">
@@ -47,11 +49,11 @@
                     <label class="form-label">Kegiatan</label>
                     <div id="activities-container">
                         <div class="row mb-2 activity-row">
-                            <div class="col-md-5">
+                            <div class="col-md-6">
                                 <input type="text" name="activities[0][activity]" class="form-control" placeholder="Nama kegiatan" required>
                             </div>
-                            <div class="col-md-5">
-                                <input type="text" name="activities[0][time]" class="form-control" placeholder="08:00 - 10:00" required>
+                            <div class="col-md-4">
+                                <input type="text" name="activities[0][time]" class="form-control" placeholder="08:00 - 09:00" required>
                             </div>
                             <div class="col-md-2">
                                 <button type="button" class="btn btn-outline-danger btn-sm remove-activity">
@@ -82,16 +84,37 @@
 document.addEventListener('DOMContentLoaded', function() {
     let activityIndex = 1;
     
+    // Function to get day name from date
+    function getDayFromDate(dateString) {
+        const date = new Date(dateString);
+        const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        return days[date.getDay()];
+    }
+    
+    // Function to update day when date changes
+    function updateDayFromDate() {
+        const dateInput = document.getElementById('date');
+        const daySelect = document.getElementById('day');
+        
+        if (dateInput.value) {
+            const dayName = getDayFromDate(dateInput.value);
+            daySelect.value = dayName;
+        }
+    }
+    
+    // Add event listener to date input
+    document.getElementById('date').addEventListener('change', updateDayFromDate);
+    
     document.getElementById('add-activity').addEventListener('click', function() {
         const container = document.getElementById('activities-container');
         const newRow = document.createElement('div');
         newRow.className = 'row mb-2 activity-row';
         newRow.innerHTML = `
-            <div class="col-md-5">
+            <div class="col-md-6">
                 <input type="text" name="activities[${activityIndex}][activity]" class="form-control" placeholder="Nama kegiatan" required>
             </div>
-            <div class="col-md-5">
-                <input type="text" name="activities[${activityIndex}][time]" class="form-control" placeholder="08:00 - 10:00" required>
+            <div class="col-md-4">
+                <input type="text" name="activities[${activityIndex}][time]" class="form-control" placeholder="08:00 - 09:00" required>
             </div>
             <div class="col-md-2">
                 <button type="button" class="btn btn-outline-danger btn-sm remove-activity">

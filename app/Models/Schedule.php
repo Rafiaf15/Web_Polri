@@ -15,7 +15,10 @@ class Schedule extends Model
         'time',
         'room',
         'activities',
-        'status'
+        'status',
+        'source',
+        'pdf_filename',
+        'pdf_path'
     ];
 
     protected $casts = [
@@ -28,14 +31,14 @@ class Schedule extends Model
      */
     public function checkForConflicts()
     {
-        // Cek konflik dalam jadwal yang sama
+        // Cek konflik internal (antar kegiatan dalam satu jadwal)
         if ($this->hasInternalConflicts()) {
             return true;
         }
 
-        // Cek konflik dengan jadwal lain
+        // Cek konflik dengan jadwal lain pada tanggal yang sama
         $otherSchedules = Schedule::where('id', '!=', $this->id)
-            ->where('day', $this->day)
+            ->where('date', $this->date)
             ->get();
 
         foreach ($otherSchedules as $schedule) {
@@ -48,25 +51,41 @@ class Schedule extends Model
     }
 
     /**
-     * Cek konflik dalam jadwal yang sama
+     * Cek konflik antar kegiatan dalam satu jadwal
      */
     private function hasInternalConflicts()
     {
-        $activities = $this->activities ?? [];
+        if (empty($this->activities) || count($this->activities) <= 1) {
+            return false;
+        }
+
+        $activityRanges = [];
         
-        for ($i = 0; $i < count($activities); $i++) {
-            for ($j = $i + 1; $j < count($activities); $j++) {
-                if (isset($activities[$i]['time']) && isset($activities[$j]['time'])) {
-                    $time1 = $this->parseTimeRange($activities[$i]['time']);
-                    $time2 = $this->parseTimeRange($activities[$j]['time']);
-                    
-                    if ($this->timeRangesOverlap($time1, $time2)) {
-                        return true;
-                    }
+        // Parse waktu untuk setiap kegiatan
+        foreach ($this->activities as $activity) {
+            // Gunakan waktu individual dari kegiatan, jika tidak ada gunakan waktu utama
+            $activityTime = $activity['time'] ?? $this->time;
+            $timeRange = $this->parseTimeRange($activityTime);
+            if ($timeRange) {
+                $activityRanges[] = [
+                    'activity' => $activity['activity'],
+                    'range' => $timeRange,
+                    'time' => $activityTime
+                ];
+            }
+        }
+
+        // Cek overlap antar kegiatan
+        for ($i = 0; $i < count($activityRanges); $i++) {
+            for ($j = $i + 1; $j < count($activityRanges); $j++) {
+                if ($this->timeRangesOverlap($activityRanges[$i]['range'], $activityRanges[$j]['range'])) {
+                    // Debug: log konflik yang ditemukan
+                    \Log::info("Konflik terdeteksi: {$activityRanges[$i]['activity']} ({$activityRanges[$i]['time']}) vs {$activityRanges[$j]['activity']} ({$activityRanges[$j]['time']})");
+                    return true;
                 }
             }
         }
-        
+
         return false;
     }
 
@@ -75,38 +94,75 @@ class Schedule extends Model
      */
     private function hasTimeConflict($otherSchedule)
     {
-        $thisActivities = $this->activities ?? [];
-        $otherActivities = $otherSchedule->activities ?? [];
+        $thisTime = $this->parseTimeRange($this->time);
+        $otherTime = $this->parseTimeRange($otherSchedule->time);
 
-        foreach ($thisActivities as $thisActivity) {
-            foreach ($otherActivities as $otherActivity) {
-                if (isset($thisActivity['time']) && isset($otherActivity['time'])) {
-                    $thisTime = $this->parseTimeRange($thisActivity['time']);
-                    $otherTime = $this->parseTimeRange($otherActivity['time']);
-
-                    if ($this->timeRangesOverlap($thisTime, $otherTime)) {
-                        return true;
-                    }
-                }
-            }
+        if ($thisTime && $otherTime) {
+            return $this->timeRangesOverlap($thisTime, $otherTime);
         }
 
         return false;
     }
 
     /**
-     * Parse range waktu (contoh: "08:00 - 10:00")
+     * Parse range waktu (contoh: "08:00 - 10:00", "08.30 - selesai")
      */
     private function parseTimeRange($timeRange)
     {
-        $times = explode(' - ', $timeRange);
-        if (count($times) === 2) {
+        if (empty($timeRange)) return null;
+
+        // Handle "selesai" format
+        if (strpos($timeRange, 'selesai') !== false) {
+            $startTime = preg_replace('/\s*-\s*selesai.*/i', '', $timeRange);
+            $startTime = trim($startTime);
+            
+            // Convert to 24-hour format if needed
+            $startTime = $this->normalizeTime($startTime);
+            
             return [
-                'start' => strtotime($times[0]),
-                'end' => strtotime($times[1])
+                'start' => strtotime($startTime),
+                'end' => strtotime('23:59') // End of day
             ];
         }
-        return null;
+
+        // Handle normal time range
+        $times = explode(' - ', $timeRange);
+        if (count($times) === 2) {
+            $startTime = $this->normalizeTime(trim($times[0]));
+            $endTime = $this->normalizeTime(trim($times[1]));
+            
+            return [
+                'start' => strtotime($startTime),
+                'end' => strtotime($endTime)
+            ];
+        }
+
+        // Single time
+        $singleTime = $this->normalizeTime(trim($timeRange));
+        return [
+            'start' => strtotime($singleTime),
+            'end' => strtotime($singleTime) + 3600 // 1 hour duration
+        ];
+    }
+
+    /**
+     * Normalize time format
+     */
+    private function normalizeTime($time)
+    {
+        // Remove WIB, etc.
+        $time = preg_replace('/\s*WIB.*/i', '', $time);
+        $time = trim($time);
+        
+        // Convert dot to colon
+        $time = str_replace('.', ':', $time);
+        
+        // Ensure proper format
+        if (preg_match('/^\d{1,2}:\d{2}$/', $time)) {
+            return $time;
+        }
+        
+        return $time;
     }
 
     /**
@@ -159,6 +215,28 @@ class Schedule extends Model
     public function getStatusText()
     {
         return $this->status === 'available' ? 'Tidak Bentrok' : 'Bentrok';
+    }
+
+    /**
+     * Cari jadwal yang sudah ada dengan tanggal yang sama
+     */
+    public static function findByDate($date)
+    {
+        return self::where('date', $date)->first();
+    }
+
+    /**
+     * Gabungkan kegiatan ke jadwal yang sudah ada
+     */
+    public function mergeActivities($newActivities)
+    {
+        $existingActivities = $this->activities ?? [];
+        $mergedActivities = array_merge($existingActivities, $newActivities);
+        
+        $this->update(['activities' => $mergedActivities]);
+        $this->forceUpdateConflictStatus();
+        
+        return $this;
     }
 
     /**

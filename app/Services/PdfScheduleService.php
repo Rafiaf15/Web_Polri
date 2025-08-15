@@ -11,12 +11,13 @@ class PdfScheduleService
     /**
      * Import jadwal dari PDF
      */
-    public static function importFromPdf($file)
+    public static function importFromPdf($file, $pdfPath = null, $pdfFilename = null)
     {
         $extractedData = self::debugExtractedData($file);
         $parsedSchedules = $extractedData['parsed_schedules'];
 
         $imported = 0;
+        $merged = 0;
         $errors = [];
         $warnings = [];
 
@@ -36,8 +37,23 @@ class PdfScheduleService
             }
 
             try {
-                \App\Models\Schedule::create($schedule);
-                $imported++;
+                // Tambahkan informasi PDF
+                $schedule['source'] = 'pdf';
+                $schedule['pdf_filename'] = $pdfFilename ?: ($file ? $file->getClientOriginalName() : 'imported.pdf');
+                $schedule['pdf_path'] = $pdfPath;
+                
+                // Check if schedule with same date already exists
+                $existingSchedule = \App\Models\Schedule::findByDate($schedule['date']);
+                
+                if ($existingSchedule) {
+                    // Merge activities with existing schedule
+                    $existingSchedule->mergeActivities($schedule['activities']);
+                    $merged++;
+                } else {
+                    // Create new schedule
+                    \App\Models\Schedule::create($schedule);
+                    $imported++;
+                }
             } catch (\Exception $e) {
                 $errors[] = [
                     'schedule' => $schedule,
@@ -49,6 +65,7 @@ class PdfScheduleService
         return [
             'total' => count($parsedSchedules),
             'imported' => $imported,
+            'merged' => $merged,
             'errors' => $errors,
             'warnings' => $warnings,
             'extraction_info' => [
@@ -107,7 +124,7 @@ class PdfScheduleService
         $text = $pdf->getText();
 
         // Parsing menggunakan script Python yang sudah diperbaiki
-        $parsed = self::parseSchedules($text);
+        $parsed = self::parseSchedules($text, $file);
 
         return [
             'raw_text' => $text,
@@ -123,7 +140,7 @@ class PdfScheduleService
     /**
      * Parsing jadwal dari teks PDF menggunakan script Python yang diperbaiki
      */
-    private static function parseSchedules($text)
+    private static function parseSchedules($text, $file = null)
     {
         $scriptPath = base_path('python/extract_schedule.py'); // script Python
 
@@ -220,14 +237,14 @@ class PdfScheduleService
         if (isset($data['schedule_items']) && is_array($data['schedule_items'])) {
             // Format baru: gunakan schedule_items
             foreach ($data['schedule_items'] as $item) {
-                $schedule = self::convertItemToSchedule($item);
+                $schedule = self::convertItemToSchedule($item, $file, null); // pdfPath akan di-set di importFromPdf
                 if ($schedule) {
                     $schedules[] = $schedule;
                 }
             }
         } else {
             // Fallback ke format lama untuk kompatibilitas
-            $schedules = self::convertLegacyFormat($data);
+            $schedules = self::convertLegacyFormat($data, $file);
         }
 
         return [
@@ -243,7 +260,7 @@ class PdfScheduleService
     /**
      * Konversi item dari format Python ke format Schedule model
      */
-    private static function convertItemToSchedule($item)
+    private static function convertItemToSchedule($item, $pdfFile = null, $pdfPath = null)
     {
         $date = self::parseDate($item['date'] ?? '');
         $day = $item['day'] ?? '';
@@ -266,21 +283,37 @@ class PdfScheduleService
             }
         }
 
-        return [
+        $scheduleData = [
             'day' => $day,
             'date' => $date,
             'time' => $time,
             'room' => $room,
             'activities' => [
                 ['activity' => $activity, 'time' => $time]
-            ]
+            ],
+            'source' => 'pdf',
+            'pdf_filename' => $pdfFile ? self::getPdfFilename($pdfFile) : null,
+            'pdf_path' => $pdfPath
         ];
+
+        return $scheduleData;
+    }
+
+    /**
+     * Mendapatkan nama file PDF
+     */
+    private static function getPdfFilename($file)
+    {
+        if ($file && method_exists($file, 'getClientOriginalName')) {
+            return $file->getClientOriginalName();
+        }
+        return 'imported.pdf';
     }
 
     /**
      * Konversi format lama untuk backward compatibility
      */
-    private static function convertLegacyFormat($data)
+    private static function convertLegacyFormat($data, $file = null)
     {
         $schedules = [];
         $maxCount = max(
@@ -306,7 +339,9 @@ class PdfScheduleService
                     'room' => $room,
                     'activities' => [
                         ['activity' => $activityText, 'time' => $time]
-                    ]
+                    ],
+                    'source' => 'pdf',
+                    'pdf_filename' => $file ? self::getPdfFilename($file) : null
                 ];
             }
         }

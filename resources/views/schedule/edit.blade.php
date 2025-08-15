@@ -44,6 +44,8 @@
                             <option value="Rabu" {{ $schedule->day == 'Rabu' ? 'selected' : '' }}>Rabu</option>
                             <option value="Kamis" {{ $schedule->day == 'Kamis' ? 'selected' : '' }}>Kamis</option>
                             <option value="Jumat" {{ $schedule->day == 'Jumat' ? 'selected' : '' }}>Jumat</option>
+                            <option value="Sabtu" {{ $schedule->day == 'Sabtu' ? 'selected' : '' }}>Sabtu</option>
+                            <option value="Minggu" {{ $schedule->day == 'Minggu' ? 'selected' : '' }}>Minggu</option>
                         </select>
                     </div>
                     <div class="col-md-3">
@@ -65,11 +67,11 @@
                     <div id="activities-container">
                         @foreach($schedule->activities as $index => $activity)
                         <div class="row mb-2 activity-row">
-                            <div class="col-md-5">
+                            <div class="col-md-6">
                                 <input type="text" name="activities[{{ $index }}][activity]" class="form-control" value="{{ $activity['activity'] }}" placeholder="Nama kegiatan" required>
                             </div>
-                            <div class="col-md-5">
-                                <input type="text" name="activities[{{ $index }}][time]" class="form-control" value="{{ $activity['time'] }}" placeholder="08:00 - 10:00" required>
+                            <div class="col-md-4">
+                                <input type="text" name="activities[{{ $index }}][time]" class="form-control" value="{{ $activity['time'] ?? $schedule->time }}" placeholder="08:00 - 09:00" required>
                             </div>
                             <div class="col-md-2">
                                 <button type="button" class="btn btn-outline-danger btn-sm remove-activity">
@@ -101,16 +103,37 @@
 document.addEventListener('DOMContentLoaded', function() {
     let activityIndex = {{ count($schedule->activities) }};
     
+    // Function to get day name from date
+    function getDayFromDate(dateString) {
+        const date = new Date(dateString);
+        const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        return days[date.getDay()];
+    }
+    
+    // Function to update day when date changes
+    function updateDayFromDate() {
+        const dateInput = document.getElementById('date');
+        const daySelect = document.getElementById('day');
+        
+        if (dateInput.value) {
+            const dayName = getDayFromDate(dateInput.value);
+            daySelect.value = dayName;
+        }
+    }
+    
+    // Add event listener to date input
+    document.getElementById('date').addEventListener('change', updateDayFromDate);
+    
     document.getElementById('add-activity').addEventListener('click', function() {
         const container = document.getElementById('activities-container');
         const newRow = document.createElement('div');
         newRow.className = 'row mb-2 activity-row';
         newRow.innerHTML = `
-            <div class="col-md-5">
+            <div class="col-md-6">
                 <input type="text" name="activities[${activityIndex}][activity]" class="form-control" placeholder="Nama kegiatan" required>
             </div>
-            <div class="col-md-5">
-                <input type="text" name="activities[${activityIndex}][time]" class="form-control" placeholder="08:00 - 10:00" required>
+            <div class="col-md-4">
+                <input type="text" name="activities[${activityIndex}][time]" class="form-control" placeholder="08:00 - 09:00" required>
             </div>
             <div class="col-md-2">
                 <button type="button" class="btn btn-outline-danger btn-sm remove-activity">

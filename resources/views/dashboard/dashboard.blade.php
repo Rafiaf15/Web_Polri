@@ -61,7 +61,9 @@
                     </ul>
                 </div>
                 <div class="card-footer text-center">
-                    <small class="text-muted">Klik untuk melihat detail</small>
+                    <a href="{{ route('schedule.index') }}?highlight={{ $schedule->id }}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-pencil-square me-1"></i>Lihat Detail
+                    </a>
                 </div>
             </div>
         </div>
@@ -205,6 +207,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     scheduleCards.forEach(card => {
         card.addEventListener('click', function(e) {
+            // Jangan trigger jika klik pada tombol
+            if (e.target.closest('a, button')) {
+                return;
+            }
+            
             e.stopPropagation();
             
             // Hapus highlight dan blur dari semua card
