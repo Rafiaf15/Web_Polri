@@ -22,7 +22,6 @@
                             <li>Surat: Hari/Tanggal, Pukul (WIB, s.d. selesai), Tempat, Perihal/Kegiatan</li>
                             <li>Tabel: Tanggal | Waktu | Ruang | Kegiatan</li>
                         </ul>
-                        <small class="text-muted">Ekstraksi menggunakan Python dengan regex yang disesuaikan untuk Bahasa Indonesia.</small>
                     </div>
 
                     <form action="{{ route('schedule.import-pdf') }}" method="POST" enctype="multipart/form-data" id="importForm">

@@ -1,8 +1,12 @@
 /* Sidebar Custom Styles */
 .sidebar-custom {
-    width: 260px;
-    min-height: 100vh;
-    flex-shrink: 0;
+    width: 260px !important;
+    min-height: 100vh !important;
+    flex-shrink: 0 !important;
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    z-index: 1000 !important;
 }
 
 /* Override warna sidebar */
