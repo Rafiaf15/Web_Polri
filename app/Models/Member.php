@@ -10,7 +10,7 @@ class Member extends Model
     use HasFactory;
 
     protected $fillable = [
-        'name', 'rank', 'nrp', 'position', 'annual_quota'
+        'name', 'rank', 'nrp', 'jenis_cuti', 'annual_quota'
     ];
 
     /**
@@ -32,6 +32,19 @@ class Member extends Model
         $used = $this->getUsedLeaveDaysForYear($year);
         $remaining = max(0, (int)$this->annual_quota - (int)$used);
         return $remaining;
+    }
+
+    /**
+     * Jenis cuti yang berlaku/terakhir untuk tahun tertentu (fallback: tahunan)
+     */
+    public function getJenisCutiForYear(int $year): string
+    {
+        $latest = Cuti::where('nama', $this->name)
+            ->whereYear('tanggal_mulai', $year)
+            ->orderBy('tanggal_mulai', 'desc')
+            ->first();
+
+        return $latest->jenis_cuti ?? ($this->jenis_cuti ?? 'tahunan');
     }
 }
 

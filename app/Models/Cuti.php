@@ -20,7 +20,9 @@ class Cuti extends Model
         'status',
         'approved_by',
         'approved_at',
-        'rejection_reason'
+        'rejection_reason',
+        'pdf_filename',
+        'pdf_path'
     ];
 
     protected $casts = [
@@ -109,5 +111,15 @@ class Cuti extends Model
     public function getJumlahHari()
     {
         return $this->tanggal_mulai->diffInDays($this->tanggal_selesai) + 1;
+    }
+
+    public function hasPdf(): bool
+    {
+        return !empty($this->pdf_path);
+    }
+
+    public function getPdfUrl(): ?string
+    {
+        return $this->hasPdf() ? asset('storage/' . ltrim($this->pdf_path, '/')) : null;
     }
 }

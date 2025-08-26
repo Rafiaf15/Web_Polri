@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('rank')->nullable();
             $table->string('nrp')->nullable();
-            $table->string('position')->nullable();
+            $table->string('jenis_cuti')->nullable();
             $table->unsignedTinyInteger('annual_quota')->default(12); // days per year
             $table->timestamps();
         });
