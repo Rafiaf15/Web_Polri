@@ -47,6 +47,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/cuti/dashboard', [CutiController::class, 'dashboard'])->name('cuti.dashboard');
     Route::post('/cuti/{id}/approve', [CutiController::class, 'approve'])->name('cuti.approve');
     Route::post('/cuti/{id}/reject', [CutiController::class, 'reject'])->name('cuti.reject');
+    Route::post('/cuti/import-pdf', [CutiController::class, 'importFromPdf'])->name('cuti.import-pdf');
     Route::resource('cuti', CutiController::class)->except(['show']);
 
     // Sisa Cuti per Anggota

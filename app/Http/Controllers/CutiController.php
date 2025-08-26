@@ -8,6 +8,7 @@ use App\Models\Member;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use App\Services\NotificationService;
+use Smalot\PdfParser\Parser;
 
 class CutiController extends Controller
 {
@@ -250,6 +251,152 @@ class CutiController extends Controller
         $recentCutis = Cuti::with('user')->orderBy('created_at', 'desc')->limit(5)->get();
 
         return view('cuti.dashboard', compact('pendingCount', 'approvedCount', 'rejectedCount', 'recentCutis'));
+    }
+
+    /**
+     * Import data cuti dari PDF untuk menangkap jenis dan lama cuti
+     */
+    public function importFromPdf(Request $request)
+    {
+        $request->validate([
+            'pdf_file' => 'required|file|mimes:pdf|max:10240'
+        ]);
+
+        try {
+            $parser = new \Smalot\PdfParser\Parser();
+            $pdf = $parser->parseFile($request->file('pdf_file')->getRealPath());
+            $text = $pdf->getText();
+
+            // Simpan versi uppercase dan versi asli
+            $normalized = preg_replace('/\s+/', ' ', strtoupper($text));
+
+            // Ambil Jenis Cuti
+            $jenisCuti = null;
+            $jenisMap = [
+                'CUTI TAHUNAN' => 'tahunan',
+                'CUTI SAKIT' => 'sakit',
+                'CUTI MELAHIRKAN' => 'melahirkan',
+                'CUTI PENTING' => 'penting',
+            ];
+            foreach (array_keys($jenisMap) as $key) {
+                if (strpos($normalized, $key) !== false) {
+                    $jenisCuti = $jenisMap[$key];
+                    break;
+                }
+            }
+            if (!$jenisCuti) {
+                if (preg_match('/JENIS\s*CUTI\s*:\s*([^:]+?)\s{2,}/', $normalized, $m)) {
+                    $raw = trim($m[1]);
+                    $raw = preg_replace('/[^A-Z ]/', '', strtoupper($raw));
+                    if (strpos($raw, 'TAHUN') !== false) $jenisCuti = 'tahunan';
+                    elseif (strpos($raw, 'SAKIT') !== false) $jenisCuti = 'sakit';
+                    elseif (strpos($raw, 'MELAHIR') !== false) $jenisCuti = 'melahirkan';
+                    elseif (strpos($raw, 'PENTING') !== false) $jenisCuti = 'penting';
+                }
+            }
+            if (!$jenisCuti) {
+                $jenisCuti = 'tahunan';
+            }
+
+            // Ambil Lama Cuti (angka hari)
+            $lamaCuti = null;
+            if (preg_match('/LAMA\s*CUTI\s*:\s*(\d{1,2})/i', $normalized, $m)) {
+                $lamaCuti = (int)$m[1];
+            } elseif (preg_match('/SELAMA\s*(\d{1,2})\s*HARI/i', $normalized, $m)) {
+                $lamaCuti = (int)$m[1];
+            }
+
+            // 1) Coba deteksi NRP terlebih dahulu (paling akurat)
+            $members = Member::all();
+            $detectedMember = null;
+            $pdfNumbers = [];
+            if (preg_match_all('/\b(\d{6,18})\b/', $text, $numMatches)) {
+                $pdfNumbers = array_unique($numMatches[1]);
+            }
+            $matchedByNrp = [];
+            foreach ($members as $memb) {
+                $nrpDigits = preg_replace('/\D+/', '', (string) $memb->nrp);
+                if ($nrpDigits === '') continue;
+                foreach ($pdfNumbers as $num) {
+                    if ($nrpDigits === $num) {
+                        $matchedByNrp[] = $memb;
+                        break;
+                    }
+                }
+            }
+            if (count($matchedByNrp) === 1) {
+                $detectedMember = $matchedByNrp[0];
+            }
+
+            // 2) Jika belum ketemu, pakai pencocokan nama ketat (full exact setelah normalisasi)
+            if (!$detectedMember) {
+                $extractName = null;
+                if (preg_match('/Nama\s*:\s*(.+)/i', $text, $nm)) {
+                    $extractName = trim($nm[1]);
+                } elseif (preg_match('/NAMA\s*:\s*([^:]+?)\s{2,}/', $normalized, $nm)) {
+                    $extractName = trim($nm[1]);
+                }
+                $normalize = function ($name) {
+                    $name = strtoupper($name);
+                    // hapus gelar umum dan tanda baca
+                    $name = str_replace([',', '.', '  '], ' ', $name);
+                    $name = preg_replace('/\b(S\.?H\.?|S\.?IK\.?|S\.?\,?KOM\.?|A\.?Md\.?|M\.?T\.?|S\.?T\.?|S\.?IP\.?|S\.?Si\.?|S\.?Kom\.?)/i', '', $name);
+                    $name = preg_replace('/[^A-Z ]/', ' ', $name);
+                    $name = preg_replace('/\s+/', ' ', $name);
+                    return trim($name);
+                };
+                if ($extractName) {
+                    $normPdfName = $normalize($extractName);
+                    foreach ($members as $memb) {
+                        if ($normalize($memb->name) === $normPdfName) {
+                            $detectedMember = $memb;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            $result = [
+                'filename' => $request->file('pdf_file')->getClientOriginalName(),
+                'jenis_cuti' => $jenisCuti,
+                'lama_cuti' => $lamaCuti,
+                'member' => $detectedMember ? $detectedMember->name : null,
+                'matched_by' => $detectedMember ? ($matchedByNrp ? 'nrp' : 'name') : null,
+            ];
+
+            // Buat record hanya jika match pasti (unik) dan lama_cuti valid
+            if ($detectedMember && $lamaCuti && $lamaCuti > 0) {
+                $start = now()->startOfDay();
+                $end = (clone $start)->addDays(max(0, $lamaCuti - 1));
+
+                // Simpan file pdf ke storage untuk dapat dipreview
+                $storedPath = $request->file('pdf_file')->store('cuti-pdfs', 'public');
+                $storedName = $request->file('pdf_file')->getClientOriginalName();
+
+                Cuti::create([
+                    'user_id' => Auth::id(),
+                    'nama' => $detectedMember->name,
+                    'biro' => '-',
+                    'jenis_cuti' => $jenisCuti,
+                    'tanggal_mulai' => $start->toDateString(),
+                    'tanggal_selesai' => $end->toDateString(),
+                    'alasan' => 'Import PDF: ' . $result['filename'],
+                    'status' => 'approved',
+                    'pdf_filename' => $storedName,
+                    'pdf_path' => $storedPath,
+                ]);
+
+                return redirect()->route('cuti.sisa', ['year' => (int) now()->year])
+                    ->with('import_result', $result)
+                    ->with('success', 'Berhasil menambahkan cuti ' . $lamaCuti . ' hari untuk ' . $detectedMember->name . '.');
+            }
+
+            return redirect()->route('cuti.sisa')
+                ->with('import_result', $result)
+                ->with('error', 'PDF terbaca, namun anggota tidak bisa diidentifikasi secara pasti. Tidak ada data yang ditambahkan.');
+        } catch (\Exception $e) {
+            return redirect()->route('cuti.sisa')->with('error', 'Gagal membaca PDF: ' . $e->getMessage());
+        }
     }
 
     /**
